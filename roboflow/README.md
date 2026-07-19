@@ -99,6 +99,43 @@ print(model.predict("anh.jpg").json())                                      # to
 
 ---
 
+## Gọi bằng Postman
+
+Endpoint Roboflow là HTTP REST nên Postman dùng được. Ảnh truyền theo **2 cách** (KHÔNG dùng form-data file cho
+inference — form-data chỉ dành cho API upload dataset):
+
+### Cách A — Ảnh đã có URL (dễ nhất, không cần body)
+1. Method: **POST**
+2. URL: `https://detect.roboflow.com/<PROJECT>/<VERSION>`
+3. Tab **Params** (query) thêm:
+   | Key | Value |
+   |---|---|
+   | `api_key` | `<PRIVATE_API_KEY>` |
+   | `image` | `https://.../anh.jpg` (URL ảnh công khai) |
+   | `confidence` | `25` (phần trăm, 0–100) |
+   | `overlap` | `30` |
+   | `format` | `json` (hoặc `image` để nhận ảnh gán nhãn) |
+4. **Send** → nhận JSON `predictions`. Nếu để `format=image`, Postman hiển thị luôn ảnh đã vẽ box ở tab response.
+
+### Cách B — Ảnh local (base64 trong body)
+Postman không tự mã hoá base64 file, nên mã hoá trước:
+```bash
+base64 -w0 anh_test.jpg > b64.txt      # Linux/WSL;  macOS: base64 anh_test.jpg | tr -d '\n'
+```
+1. Method: **POST**
+2. URL: `https://detect.roboflow.com/<PROJECT>/<VERSION>?api_key=<KEY>&confidence=25&overlap=30`
+3. Tab **Headers**: `Content-Type: application/x-www-form-urlencoded`
+4. Tab **Body → raw** → dán **toàn bộ chuỗi base64** (nội dung `b64.txt`).
+5. **Send**.
+
+> `confidence`/`overlap` ở REST API tính theo **phần trăm (0–100)**: `25` = 0.25.
+
+### Gọi API FastAPI (bản self-host) bằng Postman — tiện hơn cho file local
+API FastAPI (`api/`) nhận **form-data file** trực tiếp:
+1. **POST** `http://<host>:8000/predict`
+2. Body → **form-data** → key `file`, kiểu **File**, chọn ảnh.
+3. Send → JSON (toạ độ + ảnh base64). Đổi sang `/predict/image` để nhận thẳng ảnh PNG gán nhãn.
+
 ## Lưu ý về toạ độ
 
 Roboflow trả **`x, y` = TÂM** bounding box (không phải góc trên-trái), `width/height` theo **pixel**. Quy đổi:
