@@ -1,0 +1,13 @@
+# ===== Bắt buộc =====
+rasterio>=1.3      # đọc/ghi JP2 + GeoTIFF của Sentinel-2 (kèm GDAL/OpenJPEG)
+numpy>=1.23
+Pillow>=9.0        # ghi PNG + resize mask (nearest)
+
+# ===== Tuỳ chọn theo phương pháp =====
+# OmniCloudMask (SOTA 2025) — cho L1C & L2A, chỉ cần Red/Green/NIR. Kéo theo torch.
+omnicloudmask>=1.7
+# s2cloudless — cho ảnh L1C (cần band cirrus B10). Bỏ comment nếu dùng --method s2cloudless.
+# s2cloudless>=1.7
+
+# scipy giúp giãn nở mask (dilation) nhanh hơn; nếu thiếu, module tự dùng numpy.
+# scipy>=1.9
