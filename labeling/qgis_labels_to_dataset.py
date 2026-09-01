@@ -5,8 +5,9 @@ Quy trình (xem labeling/README.md để có hướng dẫn QGIS chi tiết):
     1) grid   - sinh lưới ô 800x800 px (bám đúng lưới pixel của ảnh) để biết
                 vùng nào đã được soát nhãn ĐẦY ĐỦ. Mở lưới này trong QGIS,
                 sửa cột `status` thành `done` cho từng ô đã soát xong.
-    2) export - cắt các ô `done` thành ảnh 800x800 + nhãn (COCO cho
-                InternImage, YOLO .txt cho YOLO11) từ layer nhãn đã sửa tay.
+    2) export - cắt các ô `done` thành ảnh 800x800 + nhãn (YOLO .txt cho
+                YOLO11 — hướng chính; kèm cả COCO cho InternImage) từ layer
+                nhãn đã sửa tay.
     3) merge  - trộn các ô mới vào bộ dữ liệu train/valid/test hiện có
                 (ghi ra thư mục MỚI, không sửa dữ liệu gốc).
 
@@ -437,7 +438,8 @@ def main():
     e.add_argument("--min-box-px", type=float, default=2.0, help="bỏ box (sau khi cắt) nhỏ hơn ngưỡng này")
     e.add_argument("--point-box-m", type=float, default=60.0,
                    help="nếu nhãn là ĐIỂM: tạo box vuông cạnh N mét (60m = 6px ở GSD 10m)")
-    e.add_argument("--class-name", default="ship")
+    e.add_argument("--class-name", default="vessel",
+                   help="ten lop (khop CLASS_NAME cua notebook YOLO); chi dung cho ban COCO")
     e.add_argument("--status-field", default="status")
     e.add_argument("--status-value", default="done")
     e.add_argument("--keep-empty", action="store_true", default=True,
@@ -450,7 +452,8 @@ def main():
     m.add_argument("--new", required=True, help="thư mục kết quả của lệnh export")
     m.add_argument("--dataset", default=None, help="bộ dữ liệu hiện có (chỉ ĐỌC, sẽ được sao chép)")
     m.add_argument("--out", required=True, help="thư mục bộ dữ liệu mới")
-    m.add_argument("--format", choices=("coco", "yolo", "both"), default="both")
+    m.add_argument("--format", choices=("coco", "yolo", "both"), default="yolo",
+                   help="yolo (mac dinh, huong chinh) | coco (InternImage) | both")
     m.add_argument("--ratios", nargs=3, type=float, default=(0.7, 0.15, 0.15),
                    metavar=("TRAIN", "VALID", "TEST"))
     m.add_argument("--all-to", choices=("train", "valid", "test"), default=None,
@@ -458,7 +461,7 @@ def main():
     m.add_argument("--group-by", choices=("none", "scene"), default="none",
                    help="'scene': mọi ô của cùng 1 ảnh gốc vào cùng 1 split")
     m.add_argument("--seed", type=int, default=0)
-    m.add_argument("--class-name", default="ship")
+    m.add_argument("--class-name", default="vessel")
     m.add_argument("--force", action="store_true", help="xoá --out nếu đã tồn tại")
     m.set_defaults(func=cmd_merge)
 

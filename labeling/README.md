@@ -27,9 +27,10 @@ Vì vậy quy trình luôn xoay quanh **ô (tile)**:
 Hệ quả tích cực: một ô đã soát mà **không có tàu nào** (ví dụ vùng mây làm model bắn
 nhầm) vẫn rất giá trị — nó là **hard negative**, script vẫn xuất nó kèm nhãn rỗng.
 
-Ô 800×800 px vì `IMG_SIZE = 800` trong `finetune_internimage_ship_detection.ipynb`, và
-bộ ~2000 ảnh hiện có cũng là tile 800×800 (TCI 10 m → 8 km/ô). Giữ đúng kích thước để
-scale của tàu (4–18 px) trong dữ liệu mới **khớp** dữ liệu cũ.
+Ô 800×800 px vì `IMG_SIZE = 800` trong `finetune_yolo11_ship_detection.ipynb` (bản
+Kaggle — notebook fine-tune chính), và bộ ~2000 ảnh hiện có cũng là tile 800×800
+(TCI 10 m → 8 km/ô). Giữ đúng kích thước để scale của tàu (4–18 px) trong dữ liệu mới
+**khớp** dữ liệu cũ.
 
 ---
 
@@ -135,8 +136,8 @@ Sinh ra:
 ```
 new_tiles/
   images/  T51RUM_..._TCI_x4000_y2400.png     # tile 800x800, RGB uint8
-  labels/  T51RUM_..._TCI_x4000_y2400.txt     # YOLO: class cx cy w h (chuẩn hoá)
-  _annotations.coco.json                      # COCO: bbox [x, y, w, h] pixel, 1 category "ship"
+  labels/  T51RUM_..._TCI_x4000_y2400.txt     # YOLO (hướng chính): class cx cy w h chuẩn hoá
+  _annotations.coco.json                      # COCO (nhánh phụ): bbox [x, y, w, h] pixel
   tiles_index.csv                             # ảnh gốc / ox / oy / CRS -> truy ngược về toạ độ thật
   qc/                                         # ảnh đã vẽ box (chỉ khi có --qc)
 ```
@@ -159,19 +160,24 @@ của box" mà script in ra nên nằm quanh 4–18 px; nếu ra 50–100 px là
 
 Bộ dữ liệu gốc **không bị sửa** — script copy sang thư mục mới.
 
-**Cho InternImage (COCO)** — bố cục Roboflow `{split}/_annotations.coco.json`:
+**Cho YOLO11 (hướng chính)** — bố cục `{split}/images` + `{split}/labels`, đúng
+định dạng mà `finetune_yolo11_ship_detection.ipynb` (bản Kaggle) đang đọc:
 
 ```bash
 python labeling/qgis_labels_to_dataset.py merge \
   --new     new_tiles \
   --dataset /kaggle/input/datasets/hunglq/annotated-sentinel \
   --out     /kaggle/working/annotated-sentinel-v2 \
-  --format  coco \
+  --format  yolo \
   --ratios  0.7 0.15 0.15 --seed 0
 ```
 
-**Cho YOLO11** (`{split}/images` + `{split}/labels`): đổi `--format yolo`.
-Dùng `--format both` nếu muốn cả hai.
+Sau đó trỏ `TRAIN/VAL/TEST_IMAGES_DIR` và `*_LABELS_DIR` trong `CFG` của notebook
+vào thư mục `--out` mới. Nhãn đã ở dạng `class cx cy w h` chuẩn hoá, class = `0`,
+khớp `single_cls=True`.
+
+**Cho InternImage (COCO, nhánh phụ)**: đổi `--format coco` — khi đó script ghi
+`_annotations.coco.json` cạnh ảnh theo bố cục Roboflow. `--format both` xuất cả hai.
 
 Script tự đánh lại `image_id`/`annotation_id` (không đụng ảnh cũ) và gán `category_id`
 đúng bằng **category mà annotation cũ đang dùng** — tránh đúng cái bẫy 2 category trùng
@@ -214,22 +220,22 @@ Khuyến nghị thực dụng: **chạy hai lần**.
 Vài chục ô mới bên cạnh ~2000 ô cũ là **~1–2 % dữ liệu** — nếu train y hệt lần trước thì
 gần như không thấy khác biệt. Các cách xử lý, theo thứ tự nên thử:
 
-1. **Khởi tạo từ checkpoint đã fine-tune của bạn**, không phải từ checkpoint COCO gốc:
-   trong notebook InternImage đặt `load_from` = `best/latest .pth` của lần train trước
-   (với YOLO: `model = YOLO('best.pt')`). Rẻ hơn nhiều: vài epoch là đủ.
+1. **Khởi tạo từ checkpoint đã fine-tune của bạn**, không phải từ `yolo11s_tci.pt` gốc:
+   `model = YOLO('/kaggle/working/finetune_outputs/finetune/weights/best.pt')`.
+   Rẻ hơn nhiều: vài epoch là đủ. (Nhánh InternImage: đặt `load_from` = `.pth` lần trước.)
 2. **Learning rate nhỏ** — khoảng 1/5 đến 1/10 lr của lần fine-tune đầu, `warmup` ngắn,
    chạy 3–6 epoch. Lr to sẽ xoá mất những gì model đã học từ 2000 ảnh.
-3. **Oversample ô mới**: lặp lại danh sách ảnh mới 3–5 lần trong split train (với mmdet có
-   thể bọc dataset bằng `RepeatDataset` / `ClassBalancedDataset`; với YOLO thì copy ảnh +
-   nhãn thêm vài bản đổi tên). Đây là cách rẻ nhất để mẫu khó thực sự có tiếng nói.
+3. **Oversample ô mới**: lặp lại ảnh mới 3–5 lần trong split train — với YOLO thì copy
+   ảnh + nhãn thành vài bản đổi tên. Đây là cách rẻ nhất để mẫu khó thực sự có tiếng nói.
+   (Nhánh InternImage: bọc dataset bằng `RepeatDataset` / `ClassBalancedDataset`.)
 4. **Đo riêng**: ngoài mAP trên test cũ, giữ một thư mục test riêng chỉ gồm ô mới và eval
    thêm trên đó. Hai con số đọc cùng nhau mới biết mình *sửa được lỗi mới* mà *không làm hỏng
    cái cũ* (catastrophic forgetting).
 5. **Lặp lại vòng**: infer bằng model mới → xem geojson trong QGIS → những chỗ vẫn sai lại
    thành lô nhãn tiếp theo. Vòng 2–3 lần thường hiệu quả hơn một lần gán nhãn thật nhiều.
 
-Nếu tàu bị bỏ sót chủ yếu là loại **rất nhỏ / mờ**, kiểm tra thêm phía model: `anchor
-scales` (Section 7 của notebook InternImage đã hạ) và ngưỡng `CONF` lúc infer — có khi
+Nếu tàu bị bỏ sót chủ yếu là loại **rất nhỏ / mờ**, kiểm tra thêm ngưỡng `CONF` lúc
+infer (mặc định 0.1) trước khi nghĩ tới việc gán nhãn thêm — có khi
 model *có* bắt được nhưng bị lọc mất bởi `CONF` hoặc bởi bộ lọc mây
 (`CLOUD_PROTECT_CONF`, `CLOUD_FRAC_THR`). Đối chiếu `{stem}_pred_raw.geojson`
 (trước lọc mây) với `{stem}_pred.geojson` (sau lọc) trong QGIS: tàu nào chỉ có ở file
@@ -243,7 +249,7 @@ Bộ dữ liệu hiện tại vốn export từ Roboflow. Nếu quen giao diện
 
 1. Chạy `export` với `--no-keep-empty` bỏ qua (vẫn giữ ô rỗng) để lấy `new_tiles/images/`.
 2. Upload thư mục ảnh đó vào đúng project Roboflow, gán nhãn trong trình duyệt.
-3. Generate version mới → export **COCO** (cho InternImage) hoặc **YOLOv11** (cho YOLO).
+3. Generate version mới → export **YOLOv11** (hướng chính; hoặc COCO nếu dùng InternImage).
 
 Đánh đổi: mất khả năng nhìn ảnh trong bối cảnh địa lý (rất tiện để phân biệt tàu với đảo
 nhỏ hay bãi cạn cố định) và mất liên kết toạ độ, nhưng giao diện gán nhãn nhanh hơn và
